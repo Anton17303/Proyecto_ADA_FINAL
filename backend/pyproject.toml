@@ -1,0 +1,16 @@
+[project]
+name = "route-optimizer-backend"
+version = "0.1.0"
+description = "Cloud Function – Optimización de rutas con algoritmo genético"
+requires-python = ">=3.11"
+dependencies = [
+    "functions-framework>=3.0",
+    "requests>=2.31",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []

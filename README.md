@@ -1,6 +1,6 @@
 # Route Optimizer 🗺️
 
-Aplicación web que calcula la ruta óptima entre hasta 15 destinos usando un **algoritmo genético**. El cálculo ocurre en una **Cloud Function de GCP** (Python); el frontend es **React + Vite** con autenticación vía **Firebase** y visualización con **Google Maps**.
+Aplicación web que calcula la ruta óptima entre hasta 15 destinos usando un algoritmo genético. El cálculo ocurre en una **Cloud Function de GCP** (Python); el frontend es **React + Vite** con autenticación vía **Firebase** y visualización con **Google Maps**.
 
 ---
 
@@ -146,7 +146,6 @@ Copia la URL que aparece al final y ponla en `frontend/.env` como `VITE_CF_URL`.
 ```bash
 cd frontend
 npm run build
-# Sube la carpeta dist/ a Firebase Hosting, Vercel, Netlify, etc.
 ```
 
 ---

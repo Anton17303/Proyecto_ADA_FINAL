@@ -53,7 +53,7 @@ export default function App() {
     return (
       <div className="login-screen">
         <div className="login-card">
-          <h1>🗺️ Route Optimizer</h1>
+          <h1>Route Optimizer</h1>
           <p>Optimización de rutas con algoritmo genético</p>
           <button className="btn-google" onClick={handleLogin}>
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
@@ -69,7 +69,7 @@ export default function App() {
     <div className="app">
       {/* Header */}
       <header className="header">
-        <h1>🗺️ Route Optimizer</h1>
+        <h1>Route Optimizer</h1>
         <div className="user-info">
           <img src={user.photoURL} alt={user.displayName} className="avatar" />
           <span>{user.displayName}</span>

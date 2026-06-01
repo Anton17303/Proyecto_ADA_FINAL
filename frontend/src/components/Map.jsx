@@ -1,5 +1,24 @@
 import { useEffect, useRef } from "react";
 
+const MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#182436" }] },
+  { elementType: "labels.icon", stylers: [{ saturation: -45 }, { lightness: -8 }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#9fb0c8" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#111827" }] },
+  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#334155" }] },
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#152235" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#1b2c42" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#7dd3fc" }] },
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#263b55" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#0f172a" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#b8c6d9" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#375a7f" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#24364e" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#092335" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#38bdf8" }] },
+];
+
 /**
  * Mapa interactivo con rutas reales por calles usando la Directions API.
  * Muestra pines numerados y traza el recorrido siguiendo las vías.
@@ -17,6 +36,9 @@ export default function Map({ result }) {
       center: { lat: 14.634915, lng: -90.506882 },
       zoom: 12,
       mapTypeControl: false,
+      fullscreenControl: true,
+      streetViewControl: false,
+      styles: MAP_STYLE,
     });
   }, []);
 
@@ -86,9 +108,9 @@ export default function Map({ result }) {
       map: googleMapRef.current,
       suppressMarkers: true,          // usamos nuestros propios pines
       polylineOptions: {
-        strokeColor: "#1a73e8",
-        strokeOpacity: 0.85,
-        strokeWeight: 4,
+        strokeColor: "#12d6b3",
+        strokeOpacity: 0.92,
+        strokeWeight: 5,
       },
     });
 
@@ -111,9 +133,9 @@ export default function Map({ result }) {
           new window.google.maps.Polyline({
             path,
             geodesic: true,
-            strokeColor: "#1a73e8",
-            strokeOpacity: 0.85,
-            strokeWeight: 4,
+            strokeColor: "#12d6b3",
+            strokeOpacity: 0.92,
+            strokeWeight: 5,
             map: googleMapRef.current,
           });
         }

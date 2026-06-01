@@ -1,171 +1,127 @@
+import { useEffect, useRef } from "react";
+
 /**
- * Map.jsx
- * Componente de visualización del mapa con Google Maps JavaScript API.
- *
- * Muestra:
- *  - Un pin numerado por cada destino ingresado.
- *  - La ruta óptima trazada sobre el mapa (cuando hay resultado).
- *  - Overlay de carga mientras se calcula.
- *
- * Requiere la variable de entorno VITE_MAPS_JS_KEY configurada.
+ * Mapa interactivo con rutas reales por calles usando la Directions API.
+ * Muestra pines numerados y traza el recorrido siguiendo las vías.
  */
+export default function Map({ result }) {
+  const mapRef        = useRef(null);
+  const googleMapRef  = useRef(null);
+  const markersRef    = useRef([]);
+  const rendererRef   = useRef(null);
 
-import { GoogleMap, useJsApiLoader, Marker, Polyline, InfoWindow } from "@react-google-maps/api";
-import { useState } from "react";
+  // Inicializar el mapa una sola vez
+  useEffect(() => {
+    if (googleMapRef.current) return;
+    googleMapRef.current = new window.google.maps.Map(mapRef.current, {
+      center: { lat: 14.634915, lng: -90.506882 },
+      zoom: 12,
+      mapTypeControl: false,
+    });
+  }, []);
 
-const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
-const GOOGLE_MAPS_LIBRARIES = ["places"];
+  // Actualizar ruta cuando cambia el resultado
+  useEffect(() => {
+    if (!googleMapRef.current || !result) return;
 
-// Estilo oscuro para el mapa (acorde al tema de la app)
-const DARK_MAP_STYLE = [
-  { elementType: "geometry", stylers: [{ color: "#1a2333" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#141b24" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#8a97a8" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#283548" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a97a8" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0c1117" }] },
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "transit", stylers: [{ visibility: "off" }] },
-];
+    // Limpiar marcadores anteriores
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
 
-// Centro por defecto: Guatemala City
-const DEFAULT_CENTER = { lat: 14.6349, lng: -90.5069 };
+    // Limpiar renderer anterior
+    if (rendererRef.current) {
+      rendererRef.current.setMap(null);
+      rendererRef.current = null;
+    }
 
-export default function Map({ destinations, routeResult, routeMode, calculating }) {
-  const [activeMarker, setActiveMarker] = useState(null);
+    const { ordered_destinations, mode } = result;
+    const n = ordered_destinations.length;
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: import.meta.env.VITE_MAPS_JS_KEY || "",
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+    // Dibujar pines numerados
+    const bounds = new window.google.maps.LatLngBounds();
+    ordered_destinations.forEach((dest, i) => {
+      const pos = { lat: dest.lat, lng: dest.lng };
+      bounds.extend(pos);
 
-  // Determinar el centro del mapa según los destinos
-  const center =
-    destinations.length > 0
-      ? {
-          lat: destinations.reduce((sum, d) => sum + d.lat, 0) / destinations.length,
-          lng: destinations.reduce((sum, d) => sum + d.lng, 0) / destinations.length,
+      const marker = new window.google.maps.Marker({
+        position: pos,
+        map: googleMapRef.current,
+        label: {
+          text: String(i + 1),
+          color: "#fff",
+          fontWeight: "bold",
+          fontSize: "13px",
+        },
+        title: dest.name || `Destino ${i + 1}`,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 16,
+          fillColor: i === 0 ? "#1a73e8" : "#ea4335",
+          fillOpacity: 1,
+          strokeColor: "#fff",
+          strokeWeight: 2,
+        },
+        zIndex: 10,
+      });
+      markersRef.current.push(marker);
+    });
+
+    // Construir petición a Directions API
+    // origin → primer destino
+    // destination → último destino (o primero si es cerrada)
+    // waypoints → destinos intermedios
+    const origin      = { lat: ordered_destinations[0].lat, lng: ordered_destinations[0].lng };
+    const destination = mode === "closed"
+      ? origin
+      : { lat: ordered_destinations[n - 1].lat, lng: ordered_destinations[n - 1].lng };
+
+    const waypointEnd = mode === "closed" ? n : n - 1;
+    const waypoints   = ordered_destinations.slice(1, waypointEnd).map((d) => ({
+      location: { lat: d.lat, lng: d.lng },
+      stopover: true,
+    }));
+
+    const directionsService  = new window.google.maps.DirectionsService();
+    rendererRef.current = new window.google.maps.DirectionsRenderer({
+      map: googleMapRef.current,
+      suppressMarkers: true,          // usamos nuestros propios pines
+      polylineOptions: {
+        strokeColor: "#1a73e8",
+        strokeOpacity: 0.85,
+        strokeWeight: 4,
+      },
+    });
+
+    directionsService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        optimizeWaypoints: false,     // el orden ya lo calculó el GA
+      },
+      (result, status) => {
+        if (status === "OK") {
+          rendererRef.current.setDirections(result);
+        } else {
+          console.warn("Directions API error:", status);
+          // Fallback: línea recta si la API falla
+          const path = ordered_destinations.map((d) => ({ lat: d.lat, lng: d.lng }));
+          if (mode === "closed") path.push(path[0]);
+          new window.google.maps.Polyline({
+            path,
+            geodesic: true,
+            strokeColor: "#1a73e8",
+            strokeOpacity: 0.85,
+            strokeWeight: 4,
+            map: googleMapRef.current,
+          });
         }
-      : DEFAULT_CENTER;
-
-  // Construir el path de la polyline según el resultado óptimo
-  const routePath = routeResult
-    ? [
-        ...routeResult.ordered_destinations.map((d) => ({ lat: d.lat, lng: d.lng })),
-        ...(routeMode === "closed" && routeResult.ordered_destinations.length > 0
-          ? [{ lat: routeResult.ordered_destinations[0].lat, lng: routeResult.ordered_destinations[0].lng }]
-          : []),
-      ]
-    : [];
-
-  if (loadError) {
-    return (
-      <div className="map-placeholder">
-        <span className="icon">⚠️</span>
-        <p>Error al cargar Google Maps. Verifica VITE_MAPS_JS_KEY.</p>
-      </div>
+      }
     );
-  }
 
-  if (!isLoaded) {
-    return (
-      <div className="map-placeholder">
-        <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
-        <p>Cargando mapa…</p>
-      </div>
-    );
-  }
+    googleMapRef.current.fitBounds(bounds);
+  }, [result]);
 
-  // Si no hay API key configurada, mostrar placeholder informativo
-  if (!import.meta.env.VITE_MAPS_JS_KEY) {
-    return (
-      <div className="map-placeholder">
-        <span className="icon">🗺️</span>
-        <p>Configura VITE_MAPS_JS_KEY para ver el mapa.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      <GoogleMap
-        mapContainerStyle={MAP_CONTAINER_STYLE}
-        center={center}
-        zoom={destinations.length > 0 ? 10 : 8}
-        options={{
-          styles: DARK_MAP_STYLE,
-          disableDefaultUI: false,
-          zoomControl: true,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-        }}
-      >
-        {/* Pins numerados por destino */}
-        {destinations.map((dest, i) => (
-          <Marker
-            key={i}
-            position={{ lat: dest.lat, lng: dest.lng }}
-            label={{
-              text: String(i + 1),
-              color: "#000",
-              fontWeight: "700",
-              fontSize: "12px",
-            }}
-            onClick={() => setActiveMarker(i)}
-            icon={{
-              path: window.google?.maps?.SymbolPath?.CIRCLE || 0,
-              fillColor: "#00d4aa",
-              fillOpacity: 1,
-              strokeColor: "#000",
-              strokeWeight: 1,
-              scale: 14,
-            }}
-          />
-        ))}
-
-        {/* InfoWindow al hacer click en un marker */}
-        {activeMarker !== null && destinations[activeMarker] && (
-          <InfoWindow
-            position={{
-              lat: destinations[activeMarker].lat,
-              lng: destinations[activeMarker].lng,
-            }}
-            onCloseClick={() => setActiveMarker(null)}
-          >
-            <div style={{ color: "#000", fontSize: 13, fontFamily: "sans-serif" }}>
-              <strong>{destinations[activeMarker].name}</strong>
-              <br />
-              <small>
-                {destinations[activeMarker].lat.toFixed(5)},{" "}
-                {destinations[activeMarker].lng.toFixed(5)}
-              </small>
-            </div>
-          </InfoWindow>
-        )}
-
-        {/* Polyline de la ruta óptima */}
-        {routePath.length > 1 && (
-          <Polyline
-            path={routePath}
-            options={{
-              strokeColor: "#00d4aa",
-              strokeOpacity: 0.9,
-              strokeWeight: 3,
-              geodesic: true,
-            }}
-          />
-        )}
-      </GoogleMap>
-
-      {/* Overlay de carga mientras se calcula */}
-      {calculating && (
-        <div className="loading-overlay">
-          <div className="spinner" />
-          <p>Ejecutando algoritmo genético…</p>
-        </div>
-      )}
-    </div>
-  );
+  return <div ref={mapRef} className="map-container" />;
 }

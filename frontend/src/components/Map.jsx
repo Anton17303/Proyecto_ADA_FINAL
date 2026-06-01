@@ -1,127 +1,173 @@
-import { useEffect, useRef } from "react";
-
 /**
- * Mapa interactivo con rutas reales por calles usando la Directions API.
- * Muestra pines numerados y traza el recorrido siguiendo las vías.
+ * Map.jsx
+ * Fix: se usa LoadScript en lugar de useJsApiLoader para garantizar que
+ * el SDK de Google Maps se limpia correctamente al desmontar el componente.
+ * Esto evita el error "Map is not a constructor" causado por conflictos
+ * de caché entre sesiones del navegador.
  */
-export default function Map({ result }) {
-  const mapRef        = useRef(null);
-  const googleMapRef  = useRef(null);
-  const markersRef    = useRef([]);
-  const rendererRef   = useRef(null);
 
-  // Inicializar el mapa una sola vez
-  useEffect(() => {
-    if (googleMapRef.current) return;
-    googleMapRef.current = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 14.634915, lng: -90.506882 },
-      zoom: 12,
-      mapTypeControl: false,
-    });
-  }, []);
+import { useState } from "react";
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  Polyline,
+  InfoWindow,
+} from "@react-google-maps/api";
 
-  // Actualizar ruta cuando cambia el resultado
-  useEffect(() => {
-    if (!googleMapRef.current || !result) return;
+const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 
-    // Limpiar marcadores anteriores
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
+const DARK_MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#1a2333" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#141b24" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8a97a8" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#283548" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a97a8" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0c1117" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+];
 
-    // Limpiar renderer anterior
-    if (rendererRef.current) {
-      rendererRef.current.setMap(null);
-      rendererRef.current = null;
-    }
+const DEFAULT_CENTER = { lat: 14.6349, lng: -90.5069 };
 
-    const { ordered_destinations, mode } = result;
-    const n = ordered_destinations.length;
+// ── Spinner / placeholders reutilizables ─────────────────────────────────────
+function MapSpinner() {
+  return (
+    <div className="map-placeholder">
+      <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+      <p>Cargando mapa…</p>
+    </div>
+  );
+}
 
-    // Dibujar pines numerados
-    const bounds = new window.google.maps.LatLngBounds();
-    ordered_destinations.forEach((dest, i) => {
-      const pos = { lat: dest.lat, lng: dest.lng };
-      bounds.extend(pos);
+// ── Contenido interno del mapa (solo se monta cuando el SDK está listo) ──────
+function MapContent({ destinations, routeResult, routeMode, calculating }) {
+  const [activeMarker, setActiveMarker] = useState(null);
 
-      const marker = new window.google.maps.Marker({
-        position: pos,
-        map: googleMapRef.current,
-        label: {
-          text: String(i + 1),
-          color: "#fff",
-          fontWeight: "bold",
-          fontSize: "13px",
-        },
-        title: dest.name || `Destino ${i + 1}`,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 16,
-          fillColor: i === 0 ? "#1a73e8" : "#ea4335",
-          fillOpacity: 1,
-          strokeColor: "#fff",
-          strokeWeight: 2,
-        },
-        zIndex: 10,
-      });
-      markersRef.current.push(marker);
-    });
-
-    // Construir petición a Directions API
-    // origin → primer destino
-    // destination → último destino (o primero si es cerrada)
-    // waypoints → destinos intermedios
-    const origin      = { lat: ordered_destinations[0].lat, lng: ordered_destinations[0].lng };
-    const destination = mode === "closed"
-      ? origin
-      : { lat: ordered_destinations[n - 1].lat, lng: ordered_destinations[n - 1].lng };
-
-    const waypointEnd = mode === "closed" ? n : n - 1;
-    const waypoints   = ordered_destinations.slice(1, waypointEnd).map((d) => ({
-      location: { lat: d.lat, lng: d.lng },
-      stopover: true,
-    }));
-
-    const directionsService  = new window.google.maps.DirectionsService();
-    rendererRef.current = new window.google.maps.DirectionsRenderer({
-      map: googleMapRef.current,
-      suppressMarkers: true,          // usamos nuestros propios pines
-      polylineOptions: {
-        strokeColor: "#1a73e8",
-        strokeOpacity: 0.85,
-        strokeWeight: 4,
-      },
-    });
-
-    directionsService.route(
-      {
-        origin,
-        destination,
-        waypoints,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-        optimizeWaypoints: false,     // el orden ya lo calculó el GA
-      },
-      (result, status) => {
-        if (status === "OK") {
-          rendererRef.current.setDirections(result);
-        } else {
-          console.warn("Directions API error:", status);
-          // Fallback: línea recta si la API falla
-          const path = ordered_destinations.map((d) => ({ lat: d.lat, lng: d.lng }));
-          if (mode === "closed") path.push(path[0]);
-          new window.google.maps.Polyline({
-            path,
-            geodesic: true,
-            strokeColor: "#1a73e8",
-            strokeOpacity: 0.85,
-            strokeWeight: 4,
-            map: googleMapRef.current,
-          });
+  const center =
+    destinations.length > 0
+      ? {
+          lat: destinations.reduce((s, d) => s + d.lat, 0) / destinations.length,
+          lng: destinations.reduce((s, d) => s + d.lng, 0) / destinations.length,
         }
-      }
+      : DEFAULT_CENTER;
+
+  const routePath = routeResult
+    ? [
+        ...routeResult.ordered_destinations.map((d) => ({ lat: d.lat, lng: d.lng })),
+        ...(routeMode === "closed" && routeResult.ordered_destinations.length > 0
+          ? [
+              {
+                lat: routeResult.ordered_destinations[0].lat,
+                lng: routeResult.ordered_destinations[0].lng,
+              },
+            ]
+          : []),
+      ]
+    : [];
+
+  return (
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      <GoogleMap
+        mapContainerStyle={MAP_CONTAINER_STYLE}
+        center={center}
+        zoom={destinations.length > 0 ? 10 : 8}
+        options={{
+          styles: DARK_MAP_STYLE,
+          zoomControl: true,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+        }}
+      >
+        {/* Pins numerados */}
+        {destinations.map((dest, i) => (
+          <Marker
+            key={i}
+            position={{ lat: dest.lat, lng: dest.lng }}
+            label={{
+              text: String(i + 1),
+              color: "#000",
+              fontWeight: "700",
+              fontSize: "12px",
+            }}
+            onClick={() => setActiveMarker(i)}
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              fillColor: "#00d4aa",
+              fillOpacity: 1,
+              strokeColor: "#000",
+              strokeWeight: 1,
+              scale: 14,
+            }}
+          />
+        ))}
+
+        {/* InfoWindow al hacer click en marker */}
+        {activeMarker !== null && destinations[activeMarker] && (
+          <InfoWindow
+            position={{
+              lat: destinations[activeMarker].lat,
+              lng: destinations[activeMarker].lng,
+            }}
+            onCloseClick={() => setActiveMarker(null)}
+          >
+            <div style={{ color: "#000", fontSize: 13, fontFamily: "sans-serif" }}>
+              <strong>{destinations[activeMarker].name}</strong>
+              <br />
+              <small>
+                {destinations[activeMarker].lat.toFixed(5)},{" "}
+                {destinations[activeMarker].lng.toFixed(5)}
+              </small>
+            </div>
+          </InfoWindow>
+        )}
+
+        {/* Polyline de la ruta óptima */}
+        {routePath.length > 1 && (
+          <Polyline
+            path={routePath}
+            options={{
+              strokeColor: "#00d4aa",
+              strokeOpacity: 0.9,
+              strokeWeight: 3,
+              geodesic: true,
+            }}
+          />
+        )}
+      </GoogleMap>
+
+      {/* Overlay mientras calcula */}
+      {calculating && (
+        <div className="loading-overlay">
+          <div className="spinner" />
+          <p>Ejecutando algoritmo genético…</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Componente público ────────────────────────────────────────────────────────
+export default function Map(props) {
+  const apiKey = import.meta.env.VITE_MAPS_JS_KEY;
+
+  if (!apiKey) {
+    return (
+      <div className="map-placeholder">
+        <span className="icon">🗺️</span>
+        <p>Configura VITE_MAPS_JS_KEY en tu .env para ver el mapa.</p>
+      </div>
     );
+  }
 
-    googleMapRef.current.fitBounds(bounds);
-  }, [result]);
-
-  return <div ref={mapRef} className="map-container" />;
+  return (
+    <LoadScript
+      googleMapsApiKey={apiKey}
+      loadingElement={<MapSpinner />}
+      onError={() => console.error("Error cargando Google Maps SDK")}
+    >
+      <MapContent {...props} />
+    </LoadScript>
+  );
 }

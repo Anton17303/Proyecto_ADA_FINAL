@@ -1,0 +1,46 @@
+<mxfile host="app.diagrams.net" version="21.0.0">
+  <diagram name="Arquitectura" id="arch">
+    <mxGraphModel dx="1000" dy="700" grid="0" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="&lt;b&gt;Firebase Auth&lt;/b&gt;&lt;br&gt;Google Sign-In" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#003366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="&lt;b&gt;React + Vite&lt;/b&gt;&lt;br&gt;Frontend · localhost:5173" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#1B4332;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="380" y="80" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="4" value="&lt;b&gt;Cloud Function&lt;/b&gt;&lt;br&gt;Python · GCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#7D2D00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="80" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="Google Maps Platform" style="swimlane;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#3D1A78;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="290" width="760" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="6" value="Distance Matrix API" style="rounded=1;fillColor=#d5bddf;strokeColor=#9673a6;fontColor=#3D1A78;fontSize=11;" vertex="1" parent="5">
+          <mxGeometry x="20" y="45" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="7" value="Maps JavaScript API" style="rounded=1;fillColor=#d5bddf;strokeColor=#9673a6;fontColor=#3D1A78;fontSize=11;" vertex="1" parent="5">
+          <mxGeometry x="200" y="45" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="8" value="Places API" style="rounded=1;fillColor=#d5bddf;strokeColor=#9673a6;fontColor=#3D1A78;fontSize=11;" vertex="1" parent="5">
+          <mxGeometry x="400" y="45" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="9" value="Directions API" style="rounded=1;fillColor=#d5bddf;strokeColor=#9673a6;fontColor=#3D1A78;fontSize=11;" vertex="1" parent="5">
+          <mxGeometry x="580" y="45" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="10" value="Auth token" style="edgeStyle=orthogonalEdgeStyle;fontSize=11;" edge="1" source="2" target="3" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="POST /optimize" style="edgeStyle=orthogonalEdgeStyle;fontSize=11;" edge="1" source="3" target="4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="Maps JS · Places · Directions" style="edgeStyle=orthogonalEdgeStyle;fontSize=11;" edge="1" source="3" target="5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="Distance Matrix API" style="edgeStyle=orthogonalEdgeStyle;fontSize=11;" edge="1" source="4" target="5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

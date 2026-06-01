@@ -1,14 +1,8 @@
 /**
  * Map.jsx
- * Carga el SDK de Google Maps directamente via script tag, sin depender de
- * @react-google-maps/api. Esto evita los bugs de caché y "Map is not a
- * constructor" que tiene la librería en versión 2.x.
- *
- * Flujo:
- *  1. Al montar, verifica si el SDK ya está cargado (window.google?.maps).
- *  2. Si no, inyecta el script tag y espera el evento de carga.
- *  3. Una vez listo, inicializa el mapa con la API nativa.
- *  4. Actualiza markers y polyline cuando cambian destinations/routeResult.
+ * Carga el SDK de Google Maps usando el parámetro callback oficial de la API.
+ * Google llama a window.__onGoogleMapsReady cuando el SDK está 100% listo,
+ * eliminando cualquier race condition.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -25,49 +19,61 @@ const DARK_MAP_STYLE = [
 ];
 
 const DEFAULT_CENTER = { lat: 14.6349, lng: -90.5069 };
-const SCRIPT_ID = "gmap-sdk";
 
-/** Carga el SDK de Maps una sola vez; resuelve cuando está listo. */
+/**
+ * Carga el SDK de Maps usando el parámetro &callback= oficial.
+ * Google garantiza que cuando llama al callback, todo está inicializado.
+ * Retorna una Promise que resuelve cuando el SDK está listo.
+ */
 function loadMapsSDK(apiKey) {
   return new Promise((resolve, reject) => {
-    // Ya cargado
+    // Ya completamente listo
     if (window.google?.maps?.Map) {
       resolve();
       return;
     }
 
-    // Script ya insertado pero aún cargando → esperar
-    if (document.getElementById(SCRIPT_ID)) {
-      const poll = setInterval(() => {
-        if (window.google?.maps?.Map) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 100);
+    // Definir el callback global que Google va a llamar
+    const callbackName = "__googleMapsReady";
+
+    // Si ya hay un script cargando, solo enchufamos al callback existente
+    if (window[callbackName + "_pending"]) {
+      window[callbackName + "_pending"].push(resolve);
       return;
     }
 
-    // Insertar script por primera vez
+    window[callbackName + "_pending"] = [resolve];
+
+    window[callbackName] = () => {
+      window[callbackName + "_pending"].forEach((fn) => fn());
+      delete window[callbackName + "_pending"];
+      delete window[callbackName];
+    };
+
+    // Eliminar script anterior si existe (limpieza de sesión previa)
+    const old = document.getElementById("gmap-sdk");
+    if (old) old.remove();
+
     const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    script.id = "gmap-sdk";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`;
     script.async = true;
     script.defer = true;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error("No se pudo cargar Google Maps."));
+    script.onerror = () => reject(new Error("No se pudo cargar Google Maps. Verifica tu API key."));
     document.head.appendChild(script);
   });
 }
 
 export default function Map({ destinations, routeResult, routeMode, calculating }) {
   const apiKey = import.meta.env.VITE_MAPS_JS_KEY;
+
   const containerRef = useRef(null);
-  const mapRef = useRef(null);
-  const markersRef = useRef([]);
-  const polylineRef = useRef(null);
+  const mapRef       = useRef(null);
+  const markersRef   = useRef([]);
+  const polylineRef  = useRef(null);
   const infoWindowRef = useRef(null);
 
-  const [sdkReady, setSdkReady] = useState(false);
+  const [sdkReady, setSdkReady]   = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   // ── 1. Cargar SDK ──────────────────────────────────────────────────────────
@@ -78,7 +84,7 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
       .catch((err) => setLoadError(err.message));
   }, [apiKey]);
 
-  // ── 2. Inicializar mapa una vez que el SDK esté listo ─────────────────────
+  // ── 2. Inicializar mapa (solo una vez, cuando el SDK está listo) ───────────
   useEffect(() => {
     if (!sdkReady || !containerRef.current || mapRef.current) return;
 
@@ -95,17 +101,20 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
     infoWindowRef.current = new window.google.maps.InfoWindow();
   }, [sdkReady]);
 
-  // ── 3. Sincronizar markers cuando cambian los destinos ────────────────────
+  // ── 3. Actualizar markers cuando cambian los destinos ─────────────────────
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !sdkReady) return;
 
     // Limpiar markers anteriores
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
 
-    if (destinations.length === 0) return;
+    if (destinations.length === 0) {
+      mapRef.current.setCenter(DEFAULT_CENTER);
+      mapRef.current.setZoom(8);
+      return;
+    }
 
-    // Recalcular centro
     const center = {
       lat: destinations.reduce((s, d) => s + d.lat, 0) / destinations.length,
       lng: destinations.reduce((s, d) => s + d.lng, 0) / destinations.length,
@@ -113,7 +122,6 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
     mapRef.current.setCenter(center);
     mapRef.current.setZoom(10);
 
-    // Crear nuevos markers
     destinations.forEach((dest, i) => {
       const marker = new window.google.maps.Marker({
         position: { lat: dest.lat, lng: dest.lng },
@@ -149,11 +157,10 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
     });
   }, [destinations, sdkReady]);
 
-  // ── 4. Sincronizar polyline cuando llega el resultado ─────────────────────
+  // ── 4. Actualizar polyline cuando llega el resultado ──────────────────────
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !sdkReady) return;
 
-    // Limpiar polyline anterior
     if (polylineRef.current) {
       polylineRef.current.setMap(null);
       polylineRef.current = null;
@@ -165,12 +172,7 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
       lat: d.lat,
       lng: d.lng,
     }));
-
-    // Ruta cerrada: agregar el primer destino al final
-    if (routeMode === "closed" && path.length > 0) {
-      path.push(path[0]);
-    }
-
+    if (routeMode === "closed" && path.length > 0) path.push(path[0]);
     if (path.length < 2) return;
 
     polylineRef.current = new window.google.maps.Polyline({
@@ -182,7 +184,7 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
       map: mapRef.current,
     });
 
-    // Ajustar zoom para que entre toda la ruta
+    // Ajustar bounds para mostrar toda la ruta
     const bounds = new window.google.maps.LatLngBounds();
     path.forEach((p) => bounds.extend(p));
     mapRef.current.fitBounds(bounds, { padding: 60 });
@@ -209,10 +211,8 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* Contenedor nativo del mapa */}
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Spinner mientras carga el SDK */}
       {!sdkReady && (
         <div className="loading-overlay">
           <div className="spinner" />
@@ -220,8 +220,7 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
         </div>
       )}
 
-      {/* Overlay mientras calcula */}
-      {calculating && (
+      {calculating && sdkReady && (
         <div className="loading-overlay">
           <div className="spinner" />
           <p>Ejecutando algoritmo genético…</p>

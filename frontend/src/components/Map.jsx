@@ -10,11 +10,11 @@
  * Requiere la variable de entorno VITE_MAPS_JS_KEY configurada.
  */
 
-import { useEffect, useRef } from "react";
 import { GoogleMap, useJsApiLoader, Marker, Polyline, InfoWindow } from "@react-google-maps/api";
 import { useState } from "react";
 
 const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
+const GOOGLE_MAPS_LIBRARIES = ["places"];
 
 // Estilo oscuro para el mapa (acorde al tema de la app)
 const DARK_MAP_STYLE = [
@@ -35,7 +35,9 @@ export default function Map({ destinations, routeResult, routeMode, calculating 
   const [activeMarker, setActiveMarker] = useState(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
+    id: "google-map-script",
     googleMapsApiKey: import.meta.env.VITE_MAPS_JS_KEY || "",
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   // Determinar el centro del mapa según los destinos

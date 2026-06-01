@@ -12,7 +12,10 @@
  * Esta validación del cliente es solo feedback inmediato al usuario.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
+
+const GOOGLE_MAPS_LIBRARIES = ["places"];
 
 // ── Haversine (misma fórmula que en el backend) ──────────────────────────────
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -56,6 +59,27 @@ function AddDestinationForm({ onAdd, count }) {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [error, setError] = useState(null);
+  const autocompleteRef = useRef(null);
+
+  const { isLoaded: mapsLoaded } = useJsApiLoader({
+    id: "google-map-script",
+    googleMapsApiKey: import.meta.env.VITE_MAPS_JS_KEY || "",
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  const handlePlaceChanged = () => {
+    const place = autocompleteRef.current?.getPlace();
+
+    if (!place?.geometry?.location) {
+      setError("Selecciona una opción válida del autocompletado.");
+      return;
+    }
+
+    setName(place.name || place.formatted_address || "");
+    setLat(String(place.geometry.location.lat()));
+    setLng(String(place.geometry.location.lng()));
+    setError(null);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -87,6 +111,25 @@ function AddDestinationForm({ onAdd, count }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {mapsLoaded && import.meta.env.VITE_MAPS_JS_KEY && (
+        <Autocomplete
+          onLoad={(autocomplete) => {
+            autocompleteRef.current = autocomplete;
+          }}
+          onPlaceChanged={handlePlaceChanged}
+          options={{
+            fields: ["formatted_address", "geometry", "name"],
+          }}
+        >
+          <input
+            className="input"
+            type="text"
+            placeholder="Buscar destino en Google Places"
+            disabled={disabled}
+          />
+        </Autocomplete>
+      )}
+
       <input
         className="input"
         type="text"
